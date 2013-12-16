@@ -195,6 +195,14 @@ class API(object):
                                  headers)
         return data
     
+    def cinder_get(self, get_req_str):
+        headers = self.default_header
+        headers["X-Auth-Token"] = self.token
+        get_req_str = get_req_str.replace('tenantid', self.tenant_id)
+        data = self.get_get_data(self.cinder_host, get_req_str, headers)
+        print len(data['volumes']), 'volumes'
+        return data
+    
     def cinder_list_detail_v2(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
