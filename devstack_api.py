@@ -3,11 +3,14 @@
 import httplib
 import json
 
+import ifconfig
+
 class API(object):
     """API object to connect to an OpenStack environment."""
     
     def __init__(self, osurl=None, osuser=None, ospassword=None):
-        self.url = osurl or "10.23.93.47"
+        wlan0_ip = ifconfig.get_interface_dict()['wlan0']
+        self.url = osurl or wlan0_ip
         self.osuser = osuser or "admin"
         self.ospassword = ospassword or "nova"
         
@@ -151,16 +154,6 @@ class API(object):
                                   headers)
         return data
     
-#    def cinder_share_create(self, size, proto):
-#        headers = self.default_header
-#        headers["X-Auth-Token"] = self.token
-#        params = {"share": {"size": size,
-#                            "share_type": proto}}
-#        data = self.get_post_data(self.cinder_host,
-#                                  '/v1/%s/shares' % self.tenant_id,
-#                                  params,
-#                                  headers)
-#        return data
     
     def cinder_list(self):
         headers = self.default_header
