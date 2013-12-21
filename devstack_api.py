@@ -11,13 +11,14 @@ class API(object):
     def __init__(self, osurl=None, osuser=None, ospassword=None):
         wlan0_ip = ifconfig.get_interface_dict()['wlan0']
         self.url = osurl or wlan0_ip
-        self.osuser = osuser or "admin"
+        self.osuser = osuser or "demo"
         self.ospassword = ospassword or "nova"
         
         self.tenant_id = None
         self.default_header = {"Content-Type": "application/json"}
         
         self.keystone_host = self.url + ":5000"
+        self.keystone_admin_host = self.url + ':35357'
         self.cinder_host = self.url + ":8776"
         self.tenant_id = self.get_tenant_id_for_user()
         self.token = self.get_token()
@@ -82,6 +83,29 @@ class API(object):
         conn.close()
         return datadict
 
+    def keystone_get(self, url):
+        keystone_admin_host = self.url + ':35357'
+        headers = self.default_header
+        headers["X-Auth-Token"] = self.token
+        response = self.get_get_data(keystone_admin_host, url, headers)
+#        for user_dict in response['users']:
+#            if user_dict['name'] == 'admin':
+#                self.admin_id = user_dict['id']
+#                print 'admin id:', self.admin_id
+#                break
+        print response
+        return response
+        
+    def get_admin_id(self):
+        headers = self.default_header
+        headers["X-Auth-Token"] = self.token
+        response = self.keystone_get('/v2.0/users')
+        print 'reeeesponse', response
+        for user_dict in response['users']:
+            if user_dict['name'] == 'admin':
+                self.admin_id = user_dict['id']
+                print 'admin id:', self.admin_id
+                return
 
     def get_tenant_id_for_user(self, user=None, password=None):
         """
@@ -102,7 +126,9 @@ class API(object):
                                       "/v2.0/tokens",
                                       params,
                                       self.default_header)
+        print 'datadict',  datadict
         tenant_id_token = datadict['access']['token']['id']
+        print 'tenant_id_TOKEN', tenant_id_token
         
         # Now get the tenant ID
         header = {"X-Auth-Token": tenant_id_token}
