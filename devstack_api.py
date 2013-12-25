@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import httplib
 import json
 
@@ -9,21 +7,25 @@ class API(object):
     """API object to connect to an OpenStack environment."""
     
     def __init__(self, osurl=None, osuser=None, ospassword=None):
+
         wlan0_ip = ifconfig.get_interface_dict()['wlan0']
         self.url = osurl or wlan0_ip
         self.osuser = osuser or "demo"
         self.ospassword = ospassword or "nova"
-        
         self.tenant_id = None
         self.default_header = {"Content-Type": "application/json"}
         
+        # All hosts
         self.keystone_host = self.url + ":5000"
         self.keystone_admin_host = self.url + ':35357'
         self.cinder_host = self.url + ":8776"
+
+        # All functions called
         self.tenant_id = self.get_tenant_id_for_user()
         self.token = self.get_token()
 
-    def send_request(self, request_type, host, url, params=None, headers=None):
+    def send_request(self, request_type, host, url, params=None,
+                     headers=None, debug=False):
         """
         Sends the request with provided parameters and returns back the
         data returned from the request (if any).
@@ -31,7 +33,10 @@ class API(object):
         if isinstance(params, dict):
             params = json.dumps(params)
         conn = httplib.HTTPConnection(host)
-        conn.set_debuglevel(1)
+        
+        if debug:
+            conn.set_debuglevel(1)
+
         conn.request(request_type, url, params, headers or self.default_header)
 
         if request_type == "DELETE":
@@ -44,7 +49,7 @@ class API(object):
         return datadict
         
 
-    def get_post_data(self, host, url, params, headers=None):
+    def post(self, host, url, params, headers=None, debug=False):
         """
         Get data for a POST request.
         
@@ -56,7 +61,8 @@ class API(object):
         if isinstance(params, dict):
             params = json.dumps(params)
         conn = httplib.HTTPConnection(host)
-        conn.set_debuglevel(1)
+        if debug:
+            conn.set_debuglevel(1)
         conn.request("POST", url, params, headers or self.default_header)
         response = conn.getresponse()
         data = response.read()
@@ -64,7 +70,7 @@ class API(object):
         conn.close()
         return datadict
 
-    def get_get_data(self, host, url, headers=None):
+    def get(self, host, url, headers=None, debug=False):
         """
         Get data for a GET request.
         
@@ -73,12 +79,11 @@ class API(object):
         :param headers: Headers dict, e.g. {"X-Auth-Token":"blah"}
         """
         conn = httplib.HTTPConnection(host)
-        conn.set_debuglevel(1)
-        print 'get called. headers: ', headers or self.default_header
+        if debug:
+            conn.set_debuglevel(1)
         conn.request("GET", url, None, headers or self.default_header)
         response = conn.getresponse()
         data = response.read()
-        print 'data', data
         datadict = json.loads(data)
         conn.close()
         return datadict
@@ -87,20 +92,13 @@ class API(object):
         keystone_admin_host = self.url + ':35357'
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        response = self.get_get_data(keystone_admin_host, url, headers)
-#        for user_dict in response['users']:
-#            if user_dict['name'] == 'admin':
-#                self.admin_id = user_dict['id']
-#                print 'admin id:', self.admin_id
-#                break
-        print response
+        response = self.get(keystone_admin_host, url, headers)
         return response
         
     def get_admin_id(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
         response = self.keystone_get('/v2.0/users')
-        print 'reeeesponse', response
         for user_dict in response['users']:
             if user_dict['name'] == 'admin':
                 self.admin_id = user_dict['id']
@@ -122,17 +120,15 @@ class API(object):
             }
         }
         params = json.dumps(param_dict)
-        datadict = self.get_post_data(self.keystone_host,
+        datadict = self.post(self.keystone_host,
                                       "/v2.0/tokens",
                                       params,
                                       self.default_header)
-        print 'datadict',  datadict
         tenant_id_token = datadict['access']['token']['id']
-        print 'tenant_id_TOKEN', tenant_id_token
         
         # Now get the tenant ID
         header = {"X-Auth-Token": tenant_id_token}
-        datadict = self.get_get_data(self.keystone_host,
+        datadict = self.get(self.keystone_host,
                                         "/v2.0/tenants",
                                         header)
         for tenant_dict in datadict['tenants']:
@@ -174,7 +170,7 @@ class API(object):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
         params = {"volume": {"size": size}}
-        data = self.get_post_data(self.cinder_host,
+        data = self.post(self.cinder_host,
                                   '/v1/%s/volumes' % self.tenant_id,
                                   params,
                                   headers)
@@ -184,7 +180,7 @@ class API(object):
     def cinder_list(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        data = self.get_get_data(self.cinder_host,
+        data = self.get(self.cinder_host,
                                  '/v1/%s/volumes' % self.tenant_id,
                                  headers)
         return data
@@ -193,7 +189,7 @@ class API(object):
     def cinder_list_filter(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        data = self.get_get_data(self.cinder_host,
+        data = self.get(self.cinder_host,
                                  '/v1/%s/volumes?status=in-use' % self.tenant_id,
                                  headers)
         return data
@@ -201,7 +197,7 @@ class API(object):
     def cinder_list_detail(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        data = self.get_get_data(self.cinder_host,
+        data = self.get(self.cinder_host,
                                  '/v1/%s/volumes/detail' % self.tenant_id,
                                  headers)
         return data
@@ -209,7 +205,7 @@ class API(object):
     def cinder_list_v2(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        data = self.get_get_data(self.cinder_host,
+        data = self.get(self.cinder_host,
                                  '/v2/%s/volumes' % self.tenant_id,
                                  headers)
         return data
@@ -218,14 +214,14 @@ class API(object):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
         get_req_str = get_req_str.replace('tenantid', self.tenant_id)
-        data = self.get_get_data(self.cinder_host, get_req_str, headers)
+        data = self.get(self.cinder_host, get_req_str, headers)
         print len(data['volumes']), 'volumes'
         return data
     
     def cinder_list_detail_v2(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        data = self.get_get_data(self.cinder_host,
+        data = self.get(self.cinder_host,
                                  '/v2/%s/volumes/detail' % self.tenant_id,
                                  headers)
         return data
@@ -233,18 +229,10 @@ class API(object):
     def cinder_snapshot_list(self):
         headers = self.default_header
         headers["X-Auth-Token"] = self.token
-        data = self.get_get_data(self.cinder_host,
+        data = self.get(self.cinder_host,
                                  '/v2/%s/snapshots' % self.tenant_id,
                                  headers)
         return data
-    
-#    def cinder_share_list(self):
-#        headers = self.default_header
-#        headers["X-Auth-Token"] = self.token
-#        data = self.get_get_data(self.cinder_host,
-#                                 '/v1/%s/shares' % self.tenant_id,
-#                                 headers)
-#        return data
     
     def cinder_delete(self, vol_id):
         headers = self.default_header
@@ -276,6 +264,13 @@ class API(object):
         Creates volumes equal to :vol_number: with sizes as per list
         :vol_sizes:. If there are more volumes than elements in list
         :vol_sizes:, a default value of 1GB will be used.
+
+        Examples:
+        >>> # Create 4 Cinder volumes of sizes 1,2,3 and 4 respectively
+        >>> cinder_create_many(4, [1, 2, 3, 4])
+        >>> 
+        >>> # Create 4 cinder volumes with size 3,2,1 and 1 respectively
+        >>> cinder_create_many(4, [3, 2])
         """
         if vol_number > len(vol_sizes):
             vol_sizes.extend([1]*(vol_number-len(vol_sizes)))
@@ -285,5 +280,3 @@ class API(object):
 
 if __name__ == '__main__':
     a = API();
-    a.cinder_list();
-    a.cinder_list_filter();
